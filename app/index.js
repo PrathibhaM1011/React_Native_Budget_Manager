@@ -5,11 +5,11 @@ import Register from './Register';
 export default function HomeScreen() {
   return (
     <LinearGradient
-      colors={['#0f2027', '#203a43', '#2c5364']} // cool dark gradient
+      colors={['#0f2027', '#203a43', '#2c5364']} 
       style={styles.gradient}
     >
       <View style={styles.container}>
-        <Text style={styles.heading}>🚀 Welcome to My App</Text>
+        <Text style={styles.heading}> Welcome to My App</Text>
         <Register />
       </View>
     </LinearGradient>

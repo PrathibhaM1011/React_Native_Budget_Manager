@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -9,54 +16,121 @@ const Login = () => {
   const router = useRouter();
 
   const handleLogin = async () => {
-    const userData = await AsyncStorage.getItem('user');
-    if (!userData) {
-      alert('No user registered!');
-      router.push('/NoData');
-      return;
-    }
-
-    const user = JSON.parse(userData);
-
-    if (user.email === email.trim() && user.password === password) {
-      try {
-        await AsyncStorage.setItem('loggedInUser', JSON.stringify(user));
-        console.log('User data saved successfully!');
-        router.push('/BudgetEntry');
-      } catch (error) {
-        console.error('Error saving user data:', error);
+    try {
+      const usersData = await AsyncStorage.getItem('users');
+      if (!usersData) {
+        Alert.alert('No users found', 'Please register first.');
+        router.push('/Register');
+        return;
       }
-    } else {
-      alert('Invalid credentials!');
-      router.push('/NoData');
+
+      const users = JSON.parse(usersData);
+
+      const matchedUser = users.find(
+        (u) => u.email === email.trim() && u.password === password
+      );
+
+      if (!matchedUser) {
+        Alert.alert('Invalid Credentials', 'Check your email or password.');
+        return;
+      }
+
+      //  Save only the logged-in user's email in local storage
+      await AsyncStorage.setItem('loggedInUser', JSON.stringify(matchedUser));
+
+      console.log('✅ Login successful:', matchedUser.email);
+
+      //  Route based on budget availability
+      if (matchedUser.budget && matchedUser.budget !== '') {
+        router.push('/DailyExpenses');
+      } else {
+        router.push('/BudgetEntry');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('Login Error', 'Something went wrong during login.');
     }
   };
 
   return (
-    <View style={{ padding: 20 }}>
-      <Text style={{ fontSize: 20, marginBottom: 10 }}>Login</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Login</Text>
+
       <TextInput
         placeholder="Enter your email"
         value={email}
         onChangeText={setEmail}
-        style={{ borderWidth: 1, marginBottom: 10, padding: 8, width: 300 }}
+        style={styles.input}
         keyboardType="email-address"
         autoCapitalize="none"
+        autoComplete="off"
+        importantForAutofill="no"
       />
+
       <TextInput
         placeholder="Enter your password"
         value={password}
         onChangeText={setPassword}
-        style={{ borderWidth: 1, marginBottom: 10, padding: 8, width: 300 }}
+        style={styles.input}
         secureTextEntry
+        autoCapitalize="none"
+        autoComplete="off"
+        importantForAutofill="no"
       />
-      <Button
-        title="Login"
+
+      <TouchableOpacity
+        style={[styles.button, (!email || !password) && styles.disabledButton]}
         onPress={handleLogin}
         disabled={!email || !password}
-      />
+      >
+        <Text style={styles.buttonText}>Login</Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
 export default Login;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f2f2f2',
+    paddingHorizontal: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 30,
+    color: '#333',
+  },
+  input: {
+    width: '100%',
+    maxWidth: 320,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 15,
+    fontSize: 16,
+  },
+  button: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+    borderRadius: 10,
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#9e9e9e',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+});

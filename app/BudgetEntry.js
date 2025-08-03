@@ -17,6 +17,11 @@ const BudgetEntry = () => {
           const user = JSON.parse(userData);
           setUserName(user.name || user.email || 'User');
           setLoggedInUser(user);
+
+          if (user.budget) {
+            // Budget already exists, skip this page
+            router.replace('/DailyExpenses');
+          }
         }
       } catch (error) {
         console.error('Error retrieving user data:', error);
@@ -38,20 +43,34 @@ const BudgetEntry = () => {
         budget: budget
       };
 
-      await AsyncStorage.setItem('userBudget', JSON.stringify(updatedUser));
-      Alert.alert('Budget saved!', `₹${budget} set successfully`);
+      //  Save updated loggedInUser
+      await AsyncStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
 
+      //  Update budget in users list
+      const usersData = await AsyncStorage.getItem('users');
+      let users = usersData ? JSON.parse(usersData) : [];
+
+      const updatedUsers = users.map(user =>
+        user.email === updatedUser.email ? updatedUser : user
+      );
+
+      await AsyncStorage.setItem('users', JSON.stringify(updatedUsers));
+
+      Alert.alert('Budget saved!', `₹${budget} set successfully`);
       setBudget('');
       router.push('/DailyExpenses');
     } catch (error) {
       console.error('Error saving budget:', error);
       Alert.alert('Something went wrong while saving your budget.');
+      router.push('/');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.greeting}>👋 Hello, <Text style={styles.userName}>{userName}</Text></Text>
+      <Text style={styles.greeting}>
+        👋 Hello, <Text style={styles.userName}>{userName}</Text>
+      </Text>
 
       <Text style={styles.label}>💸 What's your monthly budget?</Text>
 

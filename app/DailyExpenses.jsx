@@ -1,10 +1,9 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Picker } from '@react-native-picker/picker';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect } from 'react';
 
 const categories = {
   Food: ['Groceries', 'Restaurant', 'Meat', 'Fruits/Vegetables', 'Dairy'],
@@ -17,6 +16,9 @@ const categories = {
 
 const DailyExpenseForm = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [expenseList, setExpenseList] = useState([]);
+  const [budget, setBudget] = useState(0);
+  const [userEmail, setUserEmail] = useState('');
 
   const expenseSchema = Yup.object().shape({
     amount: Yup.number().required('Amount required').positive(),
@@ -24,41 +26,83 @@ const DailyExpenseForm = () => {
     subcategory: Yup.string().required()
   });
 
-  const handleSave = async (values, { resetForm }) => {
+  //  Save new expense with userEmail attached
+const handleSave = async (values, { resetForm }) => {
+  try {
+    const loggedInUserData = await AsyncStorage.getItem('loggedInUser');
+    const user = loggedInUserData ? JSON.parse(loggedInUserData) : null;
+
+    if (!user) {
+      Alert.alert('Error', 'User not logged in');
+      return;
+    }
+
     const newExpense = {
       id: Date.now(),
       ...values,
-      date: new Date().toLocaleDateString()
+      date: new Date().toLocaleDateString(),
+      email: user.email //  Track owner
     };
 
+    //  Save to dailyExpenses (global)
     const existing = await AsyncStorage.getItem('dailyExpenses');
-    const expenseList = existing ? JSON.parse(existing) : [];
+    const allExpenses = existing ? JSON.parse(existing) : [];
+    const updatedExpenses = [...allExpenses, newExpense];
+    await AsyncStorage.setItem('dailyExpenses', JSON.stringify(updatedExpenses));
 
-    const updated = [...expenseList, newExpense];
-    await AsyncStorage.setItem('dailyExpenses', JSON.stringify(updated));
+    //  Update in loggedInUser
+    const updatedUser = {
+      ...user,
+      expenses: [...(user.expenses || []), newExpense]
+    };
+    await AsyncStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
 
+    // Update in users list
+    const usersData = await AsyncStorage.getItem('users');
+    const users = usersData ? JSON.parse(usersData) : [];
+
+    const updatedUsers = users.map(u =>
+      u.email === updatedUser.email
+        ? { ...u, expenses: [...(u.expenses || []), newExpense] }
+        : u
+    );
+
+    await AsyncStorage.setItem('users', JSON.stringify(updatedUsers));
+
+    //  Update state and UI
     Alert.alert('Expense Added', `${values.amount} for ${values.subcategory}`);
+    setExpenseList(prev => [...prev, newExpense]);
     resetForm();
     setSelectedCategory('');
-  };
+  } catch (error) {
+    console.error('Error saving expense:', error);
+    Alert.alert('Error', 'Something went wrong while saving the expense.');
+  }
+};
 
-  const [expenseList, setExpenseList] = useState([]);
-const [budget, setBudget] = useState(0);
 
-useEffect(() => {
-  const loadData = async () => {
-    const b = await AsyncStorage.getItem('userBudget');
-    const userBudget = b ? JSON.parse(b) : { budget: 0 };
-    setBudget(Number(userBudget.budget));
+  useEffect(() => {
+    const loadData = async () => {
+      const userData = await AsyncStorage.getItem('loggedInUser');
+      const user = userData ? JSON.parse(userData) : null;
 
-    const exp = await AsyncStorage.getItem('dailyExpenses');
-    setExpenseList(exp ? JSON.parse(exp) : []);
-  };
-  loadData();
-}, []);
+      if (user) {
+        setUserEmail(user.email);
+        setBudget(Number(user.budget));
 
-const totalSpent = expenseList.reduce((acc, curr) => acc + Number(curr.amount), 0);
+        const allExpenses = await AsyncStorage.getItem('dailyExpenses');
+        const parsed = allExpenses ? JSON.parse(allExpenses) : [];
 
+        //  Only load this user's expenses
+        const userExpenses = parsed.filter(item => item.email === user.email);
+        setExpenseList(userExpenses);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const totalSpent = expenseList.reduce((acc, curr) => acc + Number(curr.amount), 0);
 
   return (
     <View style={styles.container}>
@@ -116,27 +160,26 @@ const totalSpent = expenseList.reduce((acc, curr) => acc + Number(curr.amount), 
           </>
         )}
       </Formik>
-     
-<View style={styles.summaryBox}>
-  <Text style={styles.summaryTitle}>📊 Summary</Text>
-  <Text style={styles.summaryItem}>💰 Total Budget: ₹{budget}</Text>
-  <Text style={styles.summaryItem}>🧾 Spent: ₹{totalSpent}</Text>
-  <Text style={styles.summaryItem}>💸 Remaining: ₹{budget - totalSpent}</Text>
-</View>
 
-<Text style={styles.historyTitle}>📜 Expense History</Text>
-{expenseList.length === 0 ? (
-  <Text style={{ color: '#888', marginBottom: 10 }}>No expenses yet.</Text>
-) : (
-  expenseList.map((item) => (
-    <View key={item.id} style={styles.historyItem}>
-      <Text style={styles.historyText}>
-        • ₹{item.amount} - {item.category} → {item.subcategory} ({item.date})
-      </Text>
-    </View>
-  ))
-)}
+      <View style={styles.summaryBox}>
+        <Text style={styles.summaryTitle}>📊 Summary</Text>
+        <Text style={styles.summaryItem}>💰 Total Budget: ₹{budget}</Text>
+        <Text style={styles.summaryItem}>🧾 Spent: ₹{totalSpent}</Text>
+        <Text style={styles.summaryItem}>💸 Remaining: ₹{budget - totalSpent}</Text>
+      </View>
 
+      <Text style={styles.historyTitle}>📜 Expense History</Text>
+      {expenseList.length === 0 ? (
+        <Text style={{ color: '#888', marginBottom: 10 }}>No expenses yet.</Text>
+      ) : (
+        expenseList.map((item) => (
+          <View key={item.id} style={styles.historyItem}>
+            <Text style={styles.historyText}>
+              • ₹{item.amount} - {item.category} → {item.subcategory} ({item.date})
+            </Text>
+          </View>
+        ))
+      )}
     </View>
   );
 };
@@ -205,45 +248,44 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   summaryBox: {
-  backgroundColor: '#fff',
-  padding: 16,
-  borderRadius: 12,
-  marginTop: 20,
-  marginBottom: 20,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.1,
-  shadowRadius: 4,
-  elevation: 3,
-},
-summaryTitle: {
-  fontSize: 18,
-  fontWeight: '700',
-  marginBottom: 8,
-  color: '#2f3e75'
-},
-summaryItem: {
-  fontSize: 15,
-  color: '#444',
-  marginBottom: 4
-},
-historyTitle: {
-  fontSize: 18,
-  fontWeight: '600',
-  marginBottom: 10,
-  color: '#2f3e75'
-},
-historyItem: {
-  backgroundColor: '#fff',
-  padding: 12,
-  borderRadius: 10,
-  marginBottom: 10,
-  elevation: 2
-},
-historyText: {
-  fontSize: 15,
-  color: '#333'
-}
-
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    color: '#2f3e75',
+  },
+  summaryItem: {
+    fontSize: 15,
+    color: '#444',
+    marginBottom: 4,
+  },
+  historyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 10,
+    color: '#2f3e75',
+  },
+  historyItem: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+    elevation: 2,
+  },
+  historyText: {
+    fontSize: 15,
+    color: '#333',
+  },
 });
 

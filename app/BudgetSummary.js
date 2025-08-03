@@ -7,7 +7,7 @@ const BudgetSummary = () => {
 
 useEffect(()=>{
     const getBudgetData = async ()=>{
-        const data = await AsyncStorage.getItem('userBudget')
+        const data = await AsyncStorage.getItem('loggedInUser')
         if(data){
             setUserBudgetData(JSON.parse(data))
         }

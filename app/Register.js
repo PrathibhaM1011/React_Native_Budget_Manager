@@ -1,24 +1,59 @@
 import React, { useState } from 'react';
-import { Button, Text, TextInput, View, StyleSheet,TouchableOpacity,} from 'react-native';
+import {
+  Text,
+  TextInput,
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Register = () => {
-  const [Name, setName] = useState('');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const router = useRouter();
 
   const handleSubmit = async () => {
-    if (!Name.trim()) return alert("Please enter your name");
-    if (!email.trim()) return alert("Please enter your email");
-    if (!email.includes('@') || !email.includes('.')) return alert("Please enter a valid email");
-    if (!password.trim() || password.length < 4) return alert("Please enter a password (min 4 chars)");
+    if (!name.trim()) return alert('Please enter your name');
+    if (!email.trim()) return alert('Please enter your email');
+    if (!email.includes('@') || !email.includes('.'))
+      return alert('Please enter a valid email');
+    if (!password.trim() || password.length < 4)
+      return alert('Password must be at least 4 characters');
 
-    const user = { name: Name, email, password };
-    await AsyncStorage.setItem('user', JSON.stringify(user));
-    alert(`Welcome, ${Name}!`);
-    router.push('/Login');
+    try {
+      const existingUsers = await AsyncStorage.getItem('users');
+      const users = existingUsers ? JSON.parse(existingUsers) : [];
+
+      const alreadyExists = users.find(
+        (user) => user.email === email.trim()
+      );
+
+      if (alreadyExists) {
+        Alert.alert('User Already Exists', 'This email is already registered.');
+        return;
+      }
+
+      const newUser = {
+        name: name.trim(),
+        email: email.trim(),
+        password: password,
+        budget: '',
+        expenses: [] //  Add empty expense list
+      };
+
+      users.push(newUser);
+      await AsyncStorage.setItem('users', JSON.stringify(users));
+
+      Alert.alert('Registration Successful!', `Welcome, ${name.trim()}!`);
+      router.push('/Login');
+    } catch (error) {
+      console.error('Registration error:', error);
+      alert('Something went wrong during registration');
+    }
   };
 
   return (
@@ -28,10 +63,12 @@ const Register = () => {
 
         <TextInput
           placeholder="Full Name"
-          value={Name}
+          value={name}
           onChangeText={setName}
           style={styles.input}
           placeholderTextColor="#999"
+          autoComplete="off"
+          importantForAutofill="no"
         />
 
         <TextInput
@@ -41,6 +78,9 @@ const Register = () => {
           keyboardType="email-address"
           style={styles.input}
           placeholderTextColor="#999"
+          autoCapitalize="none"
+          autoComplete="off"
+          importantForAutofill="no"
         />
 
         <TextInput
@@ -50,6 +90,9 @@ const Register = () => {
           secureTextEntry
           style={styles.input}
           placeholderTextColor="#999"
+          autoCapitalize="none"
+          autoComplete="off"
+          importantForAutofill="no"
         />
 
         <TouchableOpacity style={styles.button} onPress={handleSubmit}>
@@ -71,6 +114,7 @@ const Register = () => {
 };
 
 export default Register;
+
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
@@ -84,11 +128,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     width: '100%',
     maxWidth: 360,
+    elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
-    elevation: 6,
   },
   title: {
     fontSize: 26,
